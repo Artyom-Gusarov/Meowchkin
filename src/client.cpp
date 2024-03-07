@@ -12,18 +12,17 @@ Client::Client() : io_context() {}
 Client::~Client() = default;
 
 void Client::accept_info_about_players() {
-  std::string buf;
   std::size_t count_of_players;
-  std::getline(connection, buf);
-  count_of_players = std::stoul(buf);
-  players_info.reserve(count_of_players);
-  std::getline(connection, buf);
-  my_id = std::stoul(buf);
+  connection >> count_of_players;
+  connection >> my_id;
 
   for (std::size_t i = 0; i < count_of_players; ++i) {
-    std::getline(connection, buf);
-    auto json = json::parse(buf);
-    players_info[i] = PlayerInfo(json);
+    std::string input_msg;
+    while (input_msg.empty()) {
+      std::getline(connection, input_msg);
+    }
+    auto json = json::parse(input_msg);
+    players_info.emplace_back(json);
   }
 }
 
@@ -36,12 +35,16 @@ void Client::connect(const std::string& host) {
   boost::asio::connect(s, tcp::resolver(io_context).resolve(ip, port));
   connection = tcp::iostream(std::move(s));
 
+  connection << my_name + "\n" << std::flush;
+  accept_info_about_players();
+
   std::thread([this]() mutable {
     while (connection) {
       std::string received_msg;
       if (!std::getline(connection, received_msg)) {
         break;
       }
+      if (received_msg.empty()) continue;
       auto json = json::parse(received_msg);
       std::unique_lock l(mtx);
       if (json.contains("validness")) {
@@ -51,10 +54,6 @@ void Client::connect(const std::string& host) {
       }
     }
   }).detach();
-
-  connection << my_name + "\n" << std::flush;
-
-  accept_info_about_players();
 }
 
 void Client::disconnect() { connection.close(); }
@@ -87,7 +86,7 @@ std::optional<Action> Client::receive_action() {
   return action;
 }
 
-std::optional<Feedback> Client::get_feedback() {
+std::optional<Feedback> Client::receive_feedback() {
   std::unique_lock l(mtx);
   if (received_feedbacks.empty()) {
     return std::nullopt;

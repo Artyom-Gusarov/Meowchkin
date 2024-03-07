@@ -48,7 +48,7 @@ class Client {
 
   // get feedback from que of feedback on your actions, true - valid, false -
   // invalid
-  std::optional<Feedback> get_feedback();
+  std::optional<Feedback> receive_feedback();
 };
 }  // namespace meow
 #endif  // MEOWCHKIN_CLIENT_HPP

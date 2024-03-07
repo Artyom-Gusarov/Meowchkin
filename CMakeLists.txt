@@ -10,20 +10,16 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG_INIT "-g -fsanitize=address -fsanitize=undefined")
 set(CMAKE_CXX_FLAGS_RELEASE_INIT "-O2")
 
+find_package(Boost 1.72.0 COMPONENTS system asio)
+include_directories(${Boost_INCLUDE_DIRS})
+
 include_directories("include/"
         "third_party/")
 
 FILE(GLOB SRCFILES src/*.cpp include/*.h)
 
-include(FetchContent)
+add_executable(server_example examples/server_example.cpp ${SRCFILES})
+add_executable(client_example examples/client_example.cpp  ${SRCFILES})
 
-FetchContent_Declare(
-    raylib_external
-    GIT_REPOSITORY https://github.com/raysan5/raylib.git
-)
-
-FetchContent_MakeAvailable(raylib_external)
-
-add_executable(meowchkin ${SRCFILES})
-
-target_link_libraries(meowchkin raylib)
+target_link_libraries(server_example ${Boost_LIBRARIES})
+target_link_libraries(client_example ${Boost_LIBRARIES})

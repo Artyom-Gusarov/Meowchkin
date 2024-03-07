@@ -10,11 +10,7 @@ namespace meow {
 Server::Server()
     : io_context(), acceptor(io_context, tcp::endpoint(tcp::v4(), 0)) {}
 
-Server::~Server() {
-  for (auto& thread : client_threads) {
-    thread.join();
-  }
-}
+Server::~Server() = default;
 
 [[nodiscard]] std::string Server::get_port() const {
   return std::to_string(acceptor.local_endpoint().port());
@@ -30,22 +26,24 @@ Server::~Server() {
 }
 
 void Server::handle_client(tcp::socket& socket) {
-  std::shared_ptr<tcp::iostream> client(new tcp::iostream(std::move(socket)));
+  tcp::iostream client(std::move(socket));
   std::size_t client_id =
       std::hash<std::thread::id>{}(std::this_thread::get_id());
   std::string client_name;
-  std::getline(*client, client_name);
+  client >> client_name;
 
   mtx.lock();
   players_info.emplace_back(client_id, client_name);
-  client_streams[client_id] = client;
+  client_streams[client_id] = &client;
+  ++count_of_handled_clients;
   mtx.unlock();
 
   while (client) {
     std::string received_msg;
-    if (!std::getline(*client, received_msg)) {
+    if (!std::getline(client, received_msg)) {
       break;
     }
+    if (received_msg.empty()) continue;
     auto json = json::parse(received_msg);
     std::unique_lock l(mtx);
     received_actions.emplace(json);
@@ -72,11 +70,14 @@ void Server::start_listening(int num_of_clients) {
   int count_of_accepted_clients = 0;
   while (count_of_accepted_clients < num_of_clients) {
     tcp::socket socket = acceptor.accept();
-    std::thread new_thread =
-        std::thread([&socket, this]() mutable { handle_client(socket); });
+    std::thread new_thread = std::thread(
+        [s = std::move(socket), this]() mutable { handle_client(s); });
     new_thread.detach();
     client_threads.push_back(std::move(new_thread));
     ++count_of_accepted_clients;
+  }
+  while (count_of_handled_clients < num_of_clients) {
+    sleep(1);
   }
   for (std::size_t id : get_clients_id()) {
     send_players_info(id);
