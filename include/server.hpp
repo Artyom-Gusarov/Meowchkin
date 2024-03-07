@@ -20,8 +20,9 @@ class Server {
   std::queue<Action> received_actions;
   std::vector<std::thread> client_threads;
   std::map<std::size_t, std::shared_ptr<tcp::iostream>> client_streams;
-  std::vector<std::pair<std::size_t, std::string>> client_ids_and_names;
+  std::vector<PlayerInfo> players_info;
   void handle_client(tcp::socket&);
+  void send_players_info(std::size_t);
 
  public:
   Server();

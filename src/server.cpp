@@ -23,14 +23,13 @@ Server::~Server() {
 [[nodiscard]] std::vector<std::size_t> Server::get_clients_id() const {
   std::vector<std::size_t> clients_id;
   clients_id.reserve(client_threads.size());
-  for (auto& pair : client_ids_and_names) {
-    clients_id.push_back(pair.first);
+  for (auto& info : players_info) {
+    clients_id.push_back(info.id);
   }
   return clients_id;
 }
 
 void Server::handle_client(tcp::socket& socket) {
-  //  tcp::iostream client(std::move(socket));
   std::shared_ptr<tcp::iostream> client(new tcp::iostream(std::move(socket)));
   std::size_t client_id =
       std::hash<std::thread::id>{}(std::this_thread::get_id());
@@ -38,7 +37,7 @@ void Server::handle_client(tcp::socket& socket) {
   std::getline(*client, client_name);
 
   mtx.lock();
-  client_ids_and_names.emplace_back(client_id, client_name);
+  players_info.emplace_back(client_id, client_name);
   client_streams[client_id] = client;
   mtx.unlock();
 
@@ -53,15 +52,34 @@ void Server::handle_client(tcp::socket& socket) {
   }
 }
 
+void Server::send_players_info(std::size_t client_id) {
+  std::vector<std::string> messages;
+  for (auto& info : players_info) {
+    auto json = info.to_json();
+    std::string msg = json.dump();
+    msg += "\n";
+    messages.push_back(msg);
+  }
+  auto stream = client_streams[client_id];
+  *stream << messages.size() << '\n' << std::flush;
+  *stream << client_id << '\n' << std::flush;
+  for (std::string& msg : messages) {
+    *stream << msg << std::flush;
+  }
+}
+
 void Server::start_listening(int num_of_clients) {
   int count_of_accepted_clients = 0;
   while (count_of_accepted_clients < num_of_clients) {
     tcp::socket socket = acceptor.accept();
     std::thread new_thread =
-        std::thread([&socket, this]() { handle_client(socket); });
+        std::thread([&socket, this]() mutable { handle_client(socket); });
     new_thread.detach();
     client_threads.push_back(std::move(new_thread));
     ++count_of_accepted_clients;
+  }
+  for (std::size_t id : get_clients_id()) {
+    send_players_info(id);
   }
 }
 
