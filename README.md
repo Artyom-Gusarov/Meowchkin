@@ -25,3 +25,5 @@ cd build
 cd build
 ./meowchkin client
 ```
+
+<img src="build/bin/imgs/doc_2024-06-07_20-37-35.gif" width="352" height="368" alt="GIF">
